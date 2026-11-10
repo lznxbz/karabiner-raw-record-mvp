@@ -1,37 +1,52 @@
 # Karabiner Raw Record MVP
 
-为 Karabiner-Elements 增加 `from.raw_record`，让原有规则引擎能够匹配指定设备的原始 HID 输入报告。首个已验收场景是 **蓝牙 M5 遥控器 Power → 一次 F13 点击**，并且没有附带系统电源动作。
+English | [简体中文](README.zh-CN.md)
 
-这是基于 **Karabiner-Elements v16.3.0** 的实验性本机开发版本。提供独立的 `RawRecordMVP-Elements` 和 `RawRecordMVP-EventViewer`，与官方应用并排安装，通过工具切换运行，复用已安装的官方虚拟 HID 驱动。
+Adds `from.raw_record` to Karabiner-Elements so its existing rule engine can match raw HID input reports from a specific device. The first hardware-validated use case is **Bluetooth M5 remote Power → one F13 click**, without an additional system power action.
 
-An experimental Karabiner-Elements fork adding input-only `from.raw_record` matching. The Bluetooth M5 Power-to-F13 mapping passed local hardware validation. The parallel build preserves the official installation and switches between the two input engines.
+This experimental local-development fork is based on **Karabiner-Elements v16.3.0**. It provides separate `RawRecordMVP-Elements` and `RawRecordMVP-EventViewer` applications. They install alongside the official applications, switch between input engines through a helper, and reuse the installed official virtual HID driver.
 
-## 源码入口
+## Input processing flow
 
-**请使用 [feat/parallel-install-mvp](https://github.com/lznxbz/karabiner-raw-record-mvp/tree/feat/parallel-install-mvp) 分支。** 本页同时用于仓库首页；`main` 保留上游代码，MVP 实现、独立安装工具和下列文档位于该功能分支。
+```mermaid
+flowchart TD
+    D["Physical HID device"] --> H["Existing IOHIDQueue input"]
+    D --> R["Existing raw report callback"]
+    R --> A["New raw_record adapter"]
+    H --> Q["Existing HID values and event queue"]
+    A --> Q
+    Q --> B["Existing basic rules and conditions"]
+    B --> V["Existing virtual HID output"]
+```
 
-- [并排安装、切换与完整验收记录](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-parallel.md)
-- [raw_record 语法与实现说明](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-mvp.md)
-- [蓝牙 M5 完整规则示例](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/examples/raw-record/m5-bluetooth.json)
+The new adapter turns matching raw reports into inputs for the existing HID-value and event queue. Ordinary IOHIDQueue input continues through that queue as well. Both paths use the existing `basic` rules, `conditions`, and virtual HID output.
 
-## 已验证的结果
+## Source and documentation
 
-在 Apple Silicon Mac、macOS 27.2、Xcode 27.2、官方 Karabiner-Elements 16.3.0 和官方虚拟 HID 驱动 1.8.0 的环境中完成：
+**Use the [feat/parallel-install-mvp](https://github.com/lznxbz/karabiner-raw-record-mvp/tree/feat/parallel-install-mvp) branch.** This README also appears on the repository homepage. `main` retains the upstream code; the MVP implementation, parallel-install tools, and documentation below live on the feature branch.
 
-- **9 次实体 Power 操作，恰好产生 9 组 F13 按下/松开。** 覆盖短按、两秒长按、蓝牙断开重连、Mac 睡眠唤醒，以及独立 profile 切换后的输入。
-- 每个阶段均由用户确认没有附带休眠、关机或电源对话框；长按没有多次触发。
-- 方向键、Home、Back、List 和背面字母键均能显示输入事件。当前测试配置只新增 Power → F13 映射。
-- 测试后成功恢复原版通信、M5 接管及原服务状态。原版应用、驱动助手、服务声明和配置的 **28 项文件指纹一致**。
-- 8 项相关 C++ 测试套件通过，共 2,488 项断言，包含 83 项 raw_record 断言；另有 6 项 profile 工具测试、16 项并排安装与切换测试、8 项配置及通信路径断言通过。
-- 双架构应用完成构建与签名核验。实体测试仅覆盖上述蓝牙设备和本机环境。
+- [Parallel installation, switching, and complete validation record](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-parallel.md)
+- [raw_record syntax and implementation](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-mvp.md)
+- [Complete Bluetooth M5 rule example](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/examples/raw-record/m5-bluetooth.json)
 
-USB 模式、x86_64 实机运行、强制崩溃恢复、登录/重启，以及按住按键时切换 profile 尚未实测。USB 示例中的 VID/PID 来自已有协议观察，使用前仍需核对实际设备。
+## Validated results
 
-## 构建与安装
+Validation used an Apple Silicon Mac with macOS 27.2, Xcode 27.2, official Karabiner-Elements 16.3.0, and official virtual HID driver 1.8.0:
 
-需要已安装的官方 Karabiner-Elements **16.3.0** 及其正常运行的虚拟 HID 驱动，以及完整 Xcode、Command Line Tools、XcodeGen、CMake、xz、Python 3 和 Ruby。
+- **Nine physical Power operations produced exactly nine F13 down/up pairs.** Tests covered short presses, a two-second hold, Bluetooth disconnect/reconnect, Mac sleep/wake, and input after switching isolated profiles.
+- In every phase, the user confirmed there was no additional sleep, shutdown, or power dialog. Holding the button did not produce extra clicks.
+- Direction keys, Home, Back, List, and a rear-keyboard letter all showed input events. The test configuration adds only the Power → F13 mapping.
+- After testing, the official backend, M5 grabbing, and previous service state were restored. **All 28 saved fingerprints matched** for official application files, driver helpers, service definitions, and configuration.
+- Eight relevant C++ suites passed, totaling 2,488 assertions, including 83 raw-record assertions. Six profile-helper tests, 16 parallel-install/switch tests, and eight configuration/IPC namespace assertions also passed.
+- Universal applications were built and their signatures verified. Physical validation covers only the Bluetooth device and local environment above.
 
-在 Xcode 中准备有效的 **Apple Development 应用签名证书**，并确认所需的 Apple WWDR 中间证书可用。将下面的签名身份占位符替换为自己的有效应用签名身份。
+USB operation, x86_64 hardware execution, forced-crash recovery, login/reboot, and switching profiles while a key is held have not been physically tested. The USB example's VID/PID comes from earlier protocol observations; verify the actual device before using it.
+
+## Build and install
+
+Prerequisites are official Karabiner-Elements **16.3.0** with its working virtual HID driver, full Xcode, Command Line Tools, XcodeGen, CMake, xz, Python 3, and Ruby.
+
+Prepare a valid **Apple Development application-signing certificate** in Xcode and make sure its required Apple WWDR intermediate certificate is available. Replace the signing-identity placeholder below with your own valid application-signing identity.
 
 ```sh
 git clone --branch feat/parallel-install-mvp https://github.com/lznxbz/karabiner-raw-record-mvp.git
@@ -42,11 +57,11 @@ export PQRS_ORG_CODE_SIGN_IDENTITY="YOUR_APPLICATION_SIGNING_IDENTITY_HASH"
 bash scripts/raw-record/parallel/build.sh
 ```
 
-脚本会构建、运行检查并生成 `RawRecordMVP-Parallel.pkg` 和 `parallel-package.json`，最后打印输出目录；**不会自动安装或切换服务**。
+The script builds the applications, runs checks, and creates `RawRecordMVP-Parallel.pkg` and `parallel-package.json`. It prints their output directory and **does not automatically install or switch services**.
 
-应用及其助手使用同一开发证书签名，外层安装包未做分发签名；这是本机开发产物，不是已公证的分发安装包。Apple Development 应用证书不能作为安装包分发签名证书使用。
+The applications and helpers use the same development-signing identity. The outer installer package has no distribution signature: this is a local-development artifact, not a notarized distribution installer. An Apple Development application certificate cannot be used as an installer-distribution signing certificate.
 
-连接蓝牙 M5 后，将下面两个路径替换为实际构建产物的位置，运行独立安装工具：
+Connect the Bluetooth M5, replace both paths below with your actual build-output paths, and run the parallel install helper:
 
 ```sh
 python3 scripts/raw-record/parallel/install.py \
@@ -54,35 +69,35 @@ python3 scripts/raw-record/parallel/install.py \
   /path/to/parallel-package.json
 ```
 
-安装通过正常系统流程请求管理员确认，校验安装包及签名，并比较原版文件和配置指纹。首次安装会创建独立的 Power → F13 profile；已有独立配置会保留。完整步骤见[并排安装说明](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-parallel.md)。
+Installation requests administrator authentication through the normal system process, verifies the package and signatures, and compares official file/configuration fingerprints. A first installation creates a separate Power → F13 profile; existing isolated configuration is preserved. See the [parallel installation guide](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-parallel.md) for the complete procedure.
 
-## 切换使用与恢复原版
+## Switch and restore
 
-安装后，先打开独立应用并给名称含 **RawRecordMVP** 的后台服务、辅助功能和输入监控项目授予所需权限：
+After installation, open the isolated application and grant the required background-service, Accessibility, and Input Monitoring permissions to the components named **RawRecordMVP**:
 
 ```sh
 python3 "/Library/Application Support/org.pqrs.rawmvp/RawRecordMVP-Elements/tools/raw-record-switch.py" setup
 ```
 
-启用独立版。工具会临时暂停原版输入引擎，再启动独立版；共享虚拟 HID 驱动继续运行：
+Activate the isolated version. The helper temporarily pauses the official input engine before starting the isolated engine; the shared virtual HID driver keeps running:
 
 ```sh
 python3 "/Library/Application Support/org.pqrs.rawmvp/RawRecordMVP-Elements/tools/raw-record-switch.py" developer
 ```
 
-结束后恢复原版：
+Restore the official version when finished:
 
 ```sh
 python3 "/Library/Application Support/org.pqrs.rawmvp/RawRecordMVP-Elements/tools/raw-record-switch.py" original
 ```
 
-命令以当前登录用户运行，管理员确认由系统请求。**仅打开独立应用不会启用映射**，必须通过切换工具激活。若上次切换中断，先运行 `original` 完成恢复，再开始新的测试。
+Run these commands as the logged-in user; macOS requests administrator authentication when needed. **Opening the isolated application alone does not activate the mapping.** Use the switch helper to activate it. If a previous switch was interrupted, run `original` to finish restoration before starting a new test.
 
-独立配置位于 `~/.config/karabiner-raw-record-mvp/karabiner.json`；设置了 `XDG_CONFIG_HOME` 时使用对应目录。独立版不会复制或改写原版 profile。首次在其他设备测试 Power 前，应保存工作并确认目标设备已被独立版接管。
+Isolated configuration lives at `~/.config/karabiner-raw-record-mvp/karabiner.json`, or under `XDG_CONFIG_HOME` when set. The isolated version does not copy or rewrite official profiles. Before the first Power test on another device, save open work and confirm that the isolated engine has grabbed the target device.
 
-## 规则示例
+## Rule example
 
-下面是一个 basic manipulator 片段。`key_down` 和 `key_up` 只包含报告正文，**不包含 Report ID**；设备、集合、报告编号和长度均需精确匹配。
+This is a basic-manipulator fragment. `key_down` and `key_up` contain only the report payload, **excluding the Report ID**. The device, collection, report ID, and length must all match exactly.
 
 ```json
 {
@@ -103,12 +118,12 @@ python3 "/Library/Application Support/org.pqrs.rawmvp/RawRecordMVP-Elements/tool
 }
 ```
 
-蓝牙 M5 使用 VID **25098**、PID **1031**、System Control 集合 **0x01/0x80**。`repeat:false` 在按下时输出一次完整 F13 点击，原始释放报告使下一次按下能够再次触发。
+The Bluetooth M5 uses VID **25098**, PID **1031**, and System Control collection **0x01/0x80**. `repeat:false` emits one complete F13 click when pressed; the raw release report rearms the input for the next press.
 
-`raw_record` 是输入专用定义，输出继续使用普通 `to` 动作。不支持通配符、掩码或任意原始 HID 输出；应只用于普通输入管线尚未转换的输入。完整字段约束见[语法说明](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-mvp.md#json)。
+`raw_record` is input-only; output continues to use ordinary `to` actions. It does not support wildcards, masks, or arbitrary raw HID output. Use it only for inputs the ordinary pipeline does not already translate. See the [syntax reference](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-mvp.md#json) for all field constraints.
 
-## 验收记录与上游归属
+## Test recording and upstream attribution
 
-独立 EventViewer 提供默认关闭的 F13 验收记录模式，仅记录 F13 按下、松开及时间。启用方式和验证边界见[验收指南](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-parallel.md#optional-f13-hardware-test-recorder)。证书、安装包、本机配置和按键日志不随源码公开。
+The isolated EventViewer has an F13 test-recording mode that is disabled by default. It records only F13 down/up events and their times. See the [verification guide](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-parallel.md#optional-f13-hardware-test-recorder) for activation and validation limits. Certificates, installer artifacts, local configuration, and keystroke logs are not published with the source.
 
-本项目基于 [pqrs-org/Karabiner-Elements](https://github.com/pqrs-org/Karabiner-Elements)，保留上游历史和 [LICENSE.md](LICENSE.md)。官方应用下载与常规使用说明请参阅 [Karabiner-Elements 官方网站](https://karabiner-elements.pqrs.org/)。
+This project is based on [pqrs-org/Karabiner-Elements](https://github.com/pqrs-org/Karabiner-Elements), retaining its history and [LICENSE.md](LICENSE.md). For the official application and general usage documentation, visit the [Karabiner-Elements website](https://karabiner-elements.pqrs.org/).
