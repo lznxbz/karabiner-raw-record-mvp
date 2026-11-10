@@ -48,6 +48,12 @@ public:
         return manipulate_result::passed;
       }
 
+      if (auto e = front_input_event.get_event().get_if<momentary_switch_event>();
+          e && e->raw_record_key()) {
+        front_input_event.set_validity(validity::invalid);
+        return manipulate_result::passed;
+      }
+
       // We have to synchronize the caps_lock state in the following variables when caps lock state is changed.
       // - output_event_queue::modifier_flag_manager_
       // - key_event_dispatcher_.pressed_modifier_flags_

@@ -2,10 +2,12 @@
 
 #include "device_properties.hpp"
 #include "hid_report_only_events.hpp"
+#include "hid_report_only_events/raw_record.hpp"
 #include <chrono>
 #include <functional>
 #include <memory>
 #include <nod/nod.hpp>
+#include <pqrs/cf/cf_ptr.hpp>
 #include <pqrs/cf/run_loop_thread.hpp>
 #include <pqrs/dispatcher.hpp>
 #include <pqrs/gsl.hpp>
@@ -47,8 +49,22 @@ public:
       const device_properties& device_properties,
       configuration configuration)
       : dispatcher_client(weak_dispatcher),
+        weak_dispatcher_(weak_dispatcher),
+        run_loop_thread_(run_loop_thread),
+        device_(device),
+        device_properties_(device_properties),
+        configuration_(std::move(configuration)),
         last_time_stamp_(0) {
+    create_monitor();
+  }
+
+private:
+  void create_monitor() {
+    auto& configuration = configuration_;
+    auto& device_properties = device_properties_;
+    auto device = *device_;
     pqrs::osx::iokit_hid_device_events_monitor::parameters parameters;
+    input_report_handler_ = nullptr;
 
     const auto& identifiers = device_properties.get_device_identifiers();
     if (configuration.enable_input_report_handler &&
@@ -60,20 +76,27 @@ public:
           hid_report_only_events::make_report_handler(
               identifiers,
               report_descriptor);
+    }
 
+    if (!raw_record_definitions_.empty()) {
+      auto raw = std::make_shared<hid_report_only_events::raw_record>(raw_record_definitions_);
       if (input_report_handler_) {
-        parameters.input_report_filter_started =
-            [handler = input_report_handler_] {
-              handler->reset_filter_state();
-            };
+        input_report_handler_ = std::make_shared<hid_report_only_events::combined_report_handler>(input_report_handler_, raw);
+      } else {
+        input_report_handler_ = raw;
       }
+    }
+    if (input_report_handler_) {
+      parameters.input_report_filter_started = [handler = input_report_handler_] {
+        handler->reset_filter_state();
+      };
     }
 
     if (configuration.input_report_observer || input_report_handler_) {
       parameters.observe_input_reports = true;
 
       parameters.input_report_filter =
-          [observer = std::move(configuration.input_report_observer),
+          [observer = configuration.input_report_observer,
            handler = input_report_handler_](auto report_id, auto report) {
             if (observer) {
               observer(report_id, report);
@@ -85,8 +108,8 @@ public:
 
     device_events_monitor_ =
         std::make_shared<pqrs::osx::iokit_hid_device_events_monitor>(
-            weak_dispatcher,
-            run_loop_thread,
+            weak_dispatcher_,
+            run_loop_thread_,
             device,
             parameters);
 
@@ -138,10 +161,41 @@ public:
     });
   }
 
+public:
   ~hid_device_events_monitor() override {
     detach_from_dispatcher([this] {
       device_events_monitor_ = nullptr;
     });
+  }
+
+  // Dispatcher thread only. The old monitor is fully detached before publishing
+  // new definitions; its queued reports cannot enter the new generation.
+  void set_raw_record_definitions(const std::vector<raw_record_definition>& definitions) {
+    const auto& ids = device_properties_.get_device_identifiers();
+    auto selected = ids.get_is_virtual_device()
+                        ? std::vector<raw_record_definition>{}
+                        : hid_report_only_events::raw_record::select_definitions(
+                              type_safe::get(ids.get_vendor_id()),
+                              type_safe::get(ids.get_product_id()),
+                              find_report_descriptor(*device_), definitions);
+    if (selected == raw_record_definitions_) {
+      return;
+    }
+    bool was_seized = seized();
+    device_events_monitor_ = nullptr;
+    // Emit the normal device-ungrabbed lifecycle event, releasing all old inputs.
+    // This is needed even when the last raw definition is removed.
+    if (was_seized) {
+      stopped();
+    }
+    raw_record_definitions_ = std::move(selected);
+    last_time_stamp_ = pqrs::osx::chrono::absolute_time_point(0);
+    create_monitor();
+    // device_grabber re-evaluates its readiness and ignore gates before restart.
+  }
+
+  [[nodiscard]] bool has_raw_record_definitions() const {
+    return !raw_record_definitions_.empty();
   }
 
   void async_start(IOOptionBits open_options,
@@ -155,7 +209,7 @@ public:
   }
 
   [[nodiscard]] bool seized() const {
-    return device_events_monitor_->seized();
+    return device_events_monitor_ && device_events_monitor_->seized();
   }
 
 private:
@@ -205,6 +259,12 @@ private:
     }
   }
 
+  std::weak_ptr<pqrs::dispatcher::dispatcher> weak_dispatcher_;
+  pqrs::not_null_shared_ptr_t<pqrs::cf::run_loop_thread> run_loop_thread_;
+  pqrs::cf::cf_ptr<IOHIDDeviceRef> device_;
+  const device_properties device_properties_;
+  const configuration configuration_;
+  std::vector<raw_record_definition> raw_record_definitions_;
   std::shared_ptr<pqrs::osx::iokit_hid_device_events_monitor> device_events_monitor_;
 
   // should_accept_report and reset_filter_state access filter state from run_loop_thread, while

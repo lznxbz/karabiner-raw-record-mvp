@@ -71,6 +71,7 @@ public:
       control_caps_lock_led_state_manager();
 
       game_pad_stick_converter_ = nullptr;
+      pressed_keys_manager_->clear();
     });
     hid_device_events_monitor_->values_arrived.connect([this](auto&& values_ptr) {
       auto d = core_configuration_->get_selected_profile().get_device(device_properties_->get_device_identifiers());
@@ -309,6 +310,13 @@ public:
     // We have to seize the device in order to discard all input events.
     if (disabled_) {
       return true;
+    }
+
+    const auto& ids = device_properties_->get_device_identifiers();
+    if (!ids.get_is_keyboard() && !ids.get_is_pointing_device() &&
+        !ids.get_is_game_pad() && !ids.get_is_consumer()) {
+      return hid_device_events_monitor_->has_raw_record_definitions() &&
+             !device_utility::determine_should_ignore_device(*core_configuration_, *device_properties_);
     }
 
     return !device_utility::determine_should_ignore_device(*core_configuration_,

@@ -129,6 +129,28 @@ public:
         }
       }
 
+      if (from_.get_raw_record_definition()) {
+        auto check = [](const auto& self, const nlohmann::json& value) -> void {
+          if (value.is_object()) {
+            if (value.value("from_event", false)) {
+              throw pqrs::json::unmarshal_error("to.from_event cannot output a raw_record input-only event");
+            }
+            for (const auto& [key, child] : value.items()) {
+              self(self, child);
+            }
+          } else if (value.is_array()) {
+            for (const auto& child : value) {
+              self(self, child);
+            }
+          }
+        };
+        for (const auto& [key, value] : json.items()) {
+          if (key.starts_with("to")) {
+            check(check, value);
+          }
+        }
+      }
+
     } catch (...) {
       detach_from_dispatcher();
       throw;

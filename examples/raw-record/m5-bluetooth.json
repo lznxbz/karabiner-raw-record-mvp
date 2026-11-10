@@ -1,0 +1,35 @@
+{
+  "title": "Raw Record MVP: M5 Power to F13",
+  "rules": [
+    {
+      "description": "M5 Power to F13 (m5-bluetooth)",
+      "manipulators": [
+        {
+          "type": "basic",
+          "from": {
+            "raw_record": {
+              "vendor_id": 25098,
+              "product_id": 1031,
+              "collection_usage_page": 1,
+              "collection_usage": 128,
+              "report_id": 3,
+              "payload_length": 1,
+              "key_down": [
+                1
+              ],
+              "key_up": [
+                0
+              ]
+            }
+          },
+          "to": [
+            {
+              "key_code": "f13",
+              "repeat": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

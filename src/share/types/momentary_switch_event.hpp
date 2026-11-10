@@ -6,6 +6,7 @@
 #include "momentary_switch_event_details/generic_desktop.hpp"
 #include "momentary_switch_event_details/key_code.hpp"
 #include "momentary_switch_event_details/pointing_button.hpp"
+#include "raw_record_registry.hpp"
 #include <nlohmann/json.hpp>
 #include <ostream>
 #include <pqrs/hash.hpp>
@@ -17,7 +18,8 @@ class momentary_switch_event final {
 public:
   static bool target(pqrs::hid::usage_page::value_t usage_page,
                      pqrs::hid::usage::value_t usage) {
-    return momentary_switch_event_details::key_code::target(usage_page, usage) ||
+    return (usage_page == raw_record_usage_page && type_safe::get(usage) > 0) ||
+           momentary_switch_event_details::key_code::target(usage_page, usage) ||
            momentary_switch_event_details::consumer_key_code::target(usage_page, usage) ||
            momentary_switch_event_details::apple_vendor_keyboard_key_code::target(usage_page, usage) ||
            momentary_switch_event_details::apple_vendor_top_case_key_code::target(usage_page, usage) ||
@@ -131,6 +133,10 @@ public:
     return std::nullopt;
   }
 
+  [[nodiscard]] bool raw_record_key() const {
+    return usage_pair_.get_usage_page() == raw_record_usage_page;
+  }
+
   [[nodiscard]] bool valid() const {
     return usage_pair_.get_usage_page() != pqrs::hid::usage_page::undefined &&
            usage_pair_.get_usage() != pqrs::hid::usage::undefined;
@@ -180,7 +186,11 @@ inline void to_json(nlohmann::json& json, const momentary_switch_event& value) {
   auto usage_page = value.get_usage_pair().get_usage_page();
   auto usage = value.get_usage_pair().get_usage();
 
-  if (momentary_switch_event_details::key_code::target(usage_page, usage)) {
+  if (usage_page == raw_record_usage_page) {
+    // Diagnostic identity only; event_definition does not accept this as an output type.
+    json["raw_record_key"] = type_safe::get(usage);
+
+  } else if (momentary_switch_event_details::key_code::target(usage_page, usage)) {
     json["key_code"] = momentary_switch_event_details::key_code::make_name(usage);
 
   } else if (momentary_switch_event_details::consumer_key_code::target(usage_page, usage)) {
@@ -207,7 +217,14 @@ inline void from_json(const nlohmann::json& json, momentary_switch_event& value)
   pqrs::json::requires_object(json, "json");
 
   for (const auto& [k, v] : json.items()) {
-    if (k == "key_code") {
+    if (k == "raw_record_key") {
+      auto id = raw_record_unsigned(v, std::numeric_limits<int32_t>::max());
+      if (id == 0) {
+        throw pqrs::json::unmarshal_error("raw_record_key must be positive");
+      }
+      value.set_usage_pair(pqrs::hid::usage_pair(raw_record_usage_page, pqrs::hid::usage::value_t(id)));
+
+    } else if (k == "key_code") {
       value.set_usage_pair(momentary_switch_event_details::key_code::make_usage_pair(k, v));
 
     } else if (k == "consumer_key_code") {

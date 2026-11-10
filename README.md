@@ -1,3 +1,18 @@
+# Karabiner Raw Record MVP
+
+Experimental `from.raw_record` input matching for Karabiner-Elements, based on
+**v16.3.0**. The first target is an M5 remote's Power button → one F13 click.
+
+See [Raw Record MVP: syntax, build, installation and recovery](docs/raw-record-mvp.md)
+and the [Bluetooth example](examples/raw-record/m5-bluetooth.json).
+Software compilation and tests are separate from physical hardware validation.
+A complete, consistently signed package is required for installation.
+
+以下保留上游项目说明。实验功能的语法、构建和回滚步骤见上面的文档；
+编译和自动测试通过不代表已验证遥控器按键或系统电源动作拦截。
+
+---
+
 [![Build Status](https://github.com/pqrs-org/Karabiner-Elements/workflows/Karabiner-Elements%20CI/badge.svg)](https://github.com/pqrs-org/Karabiner-Elements/actions)
 [![License](https://img.shields.io/badge/license-Public%20Domain-blue.svg)](https://github.com/pqrs-org/Karabiner-Elements/blob/main/LICENSE.md)
 

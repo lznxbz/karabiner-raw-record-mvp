@@ -48,6 +48,14 @@ public:
     simultaneous_options_ = value;
   }
 
+  [[nodiscard]] const std::optional<raw_record_definition>& get_raw_record_definition() const {
+    return raw_record_definition_;
+  }
+
+  void set_raw_record_definition(const raw_record_definition& value) {
+    raw_record_definition_ = value;
+  }
+
   static bool test_event(const event_queue::event& event,
                          const event_definition& event_definition) {
     if (auto event_momentary_switch_event = event.get_if<momentary_switch_event>()) {
@@ -147,6 +155,7 @@ public:
   }
 
 private:
+  std::optional<raw_record_definition> raw_record_definition_;
   std::vector<event_definition> event_definitions_;
   from_modifiers_definition from_modifiers_definition_;
   std::optional<event_integer_value::value_t> event_integer_value_;
@@ -159,10 +168,25 @@ inline void from_json(const nlohmann::json& json, from_event_definition& d) {
   std::vector<event_definition> event_definitions;
   event_definition default_event_definition;
 
+  if (json.contains("raw_record")) {
+    for (const auto& [key, value] : json.items()) {
+      if (key != "raw_record" && key != "modifiers" && key != "description") {
+        throw pqrs::json::unmarshal_error("from.raw_record is exclusive of other input types and simultaneous options");
+      }
+    }
+  }
+
   for (const auto& [key, value] : json.items()) {
     // key is always std::string.
 
-    if (default_event_definition.handle_json(key, value, json)) {
+    if (key == "raw_record") {
+      auto definition = value.get<raw_record_definition>();
+      d.set_raw_record_definition(definition);
+      default_event_definition = event_definition::make_from_momentary_switch_event(
+          momentary_switch_event(raw_record_usage_page,
+                                 pqrs::hid::usage::value_t(raw_record_registry::source_id(definition))));
+
+    } else if (default_event_definition.handle_json(key, value, json)) {
       // Do nothing
 
     } else if (key == "modifiers") {

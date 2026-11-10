@@ -245,6 +245,11 @@ public:
             pqrs::hid::usage_page::generic_desktop,
             pqrs::hid::usage::generic_desktop::game_pad),
 
+        // Discover System Control, but seize it only for validated raw definitions.
+        pqrs::osx::iokit_hid_manager::make_matching_dictionary(
+            pqrs::hid::usage_page::generic_desktop,
+            pqrs::hid::usage::value_t(0x80)),
+
         // Headset
         pqrs::osx::iokit_hid_manager::make_matching_dictionary(
             pqrs::hid::usage_page::consumer,
@@ -323,6 +328,8 @@ public:
             process_lifecycle_manager::async_request_termination();
           }
         });
+
+        entry->get_hid_device_events_monitor()->set_raw_record_definitions(raw_record_definitions_);
 
         // ----------------------------------------
 
@@ -1019,6 +1026,7 @@ private:
 
   void update_complex_modifications_manipulators() {
     complex_modifications_manipulator_manager_->invalidate_manipulators();
+    std::vector<raw_record_definition> raw_definitions;
 
     for (const auto& rule : core_configuration_->get_selected_profile().get_complex_modifications()->get_rules()) {
       if (!rule->get_enabled()) {
@@ -1033,6 +1041,12 @@ private:
             m->push_back_condition(manipulator::condition_factory::make_condition(c.get_json()));
           }
           complex_modifications_manipulator_manager_->push_back_manipulator(m);
+          // Activate only after the entire manipulator and every condition parsed.
+          if (auto basic = std::dynamic_pointer_cast<manipulator::manipulators::basic::basic>(pqrs::unwrap_not_null(m))) {
+            if (const auto& definition = basic->get_from().get_raw_record_definition()) {
+              raw_definitions.push_back(*definition);
+            }
+          }
 
         } catch (const pqrs::json::unmarshal_error& e) {
           logger::get_logger()->error(fmt::format("karabiner.json error: {0}", e.what()));
@@ -1041,6 +1055,12 @@ private:
           logger::get_logger()->error(e.what());
         }
       }
+    }
+    std::sort(raw_definitions.begin(), raw_definitions.end());
+    raw_definitions.erase(std::unique(raw_definitions.begin(), raw_definitions.end()), raw_definitions.end());
+    raw_record_definitions_ = std::move(raw_definitions);
+    for (const auto& entry : entries_ | std::views::values) {
+      entry->get_hid_device_events_monitor()->set_raw_record_definitions(raw_record_definitions_);
     }
   }
 
@@ -1215,6 +1235,7 @@ private:
   std::optional<bool> pending_event_tap_monitor_configuration_;
   bool event_tap_monitor_stopping_ = false;
   std::optional<bool> last_caps_lock_state_;
+  std::vector<raw_record_definition> raw_record_definitions_;
   std::unique_ptr<pqrs::osx::iokit_hid_manager> hid_manager_;
   std::unordered_map<device_id, pqrs::not_null_shared_ptr_t<device_grabber_details::entry>> entries_;
   std::unordered_set<device_id> temporarily_ignored_device_ids_;

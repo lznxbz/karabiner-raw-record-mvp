@@ -8,3 +8,10 @@ a.out
 pkgroot/
 build/
 tmp/
+
+# Local raw-record build metadata and private restore data
+__pycache__/
+*.pyc
+*.dmg.sha256
+*.dmg.raw-record.json
+.raw-record-local/
