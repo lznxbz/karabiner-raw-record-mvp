@@ -15,8 +15,8 @@ prove that the hardware's default action has been suppressed.
   `0x01/0x80`, report ID 3, and a one-byte input payload.
 - The USB example uses VID 6421, PID 4133 from prior protocol observations. Recheck
   the USB descriptor and actual reports on the target Mac before using that example.
-- Power press `[3, 1]` and release `[3, 0]` are protocol expectations. Final Mac
-  hardware verification remains required, especially for Bluetooth release behavior.
+- The configured Bluetooth press `[3, 1]` and release `[3, 0]` patterns were exercised
+  by the physical tests of the isolated application described below.
 - Eight relevant C++ suites passed (2,488 assertions in total), including 83
   raw-record assertions. Six Python profile-helper tests also passed.
 - The complete application suite also compiled after backporting the two upstream
@@ -24,12 +24,16 @@ prove that the hardware's default action has been suppressed.
   and the CLI passed signature verification with the same Apple Development certificate.
   The resulting local-development image contains an **unsigned installer package**;
   it is not a Developer ID-signed distribution package and does not satisfy the
-  standard `install.sh` signature guard. It has not been installed or hardware-tested.
+  standard `install.sh` signature guard. This earlier replacement-installation artifact
+  was not installed; use the separate application route below.
 - Core Service has been compiled for arm64 and x86_64. A compiled unsigned app is
   **not an installable replacement** for the official signed app.
-- Signed full-package installation, macOS permission migration, physical F13 events,
-  default power-action suppression, long hold, reconnect, sleep/wake, and profile
-  switching require hardware validation after installation.
+- The [separate application](raw-record-parallel.md#validation) was subsequently
+  installed and tested with the Bluetooth M5. Nine physical Power operations produced
+  exactly nine F13 clicks, including long hold, reconnect, sleep/wake, and isolated
+  profile switching. The user confirmed no additional system power actions. The
+  official application was restored with its saved file/configuration fingerprints
+  and service state unchanged. USB and replacement installation remain untested.
 
 No Home/Back rules, Kodi changes, firmware changes, or system power-policy changes
 are included.

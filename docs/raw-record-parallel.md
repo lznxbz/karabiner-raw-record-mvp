@@ -131,13 +131,42 @@ are not discarded. The official Settings window may be reopened normally afterwa
 
 A new boot invalidates the isolated activation marker. The official startup preferences
 remain intact. If a switch was interrupted, run `original` to finish restoring the saved
-state before starting another test. Hardware sleep/wake, crash recovery, login/reboot,
-and service transition behavior still require actual-machine validation; software tests
-cannot establish those results by themselves.
+state before starting another test. The validation below covers one Bluetooth device
+and one Mac; crash recovery and login/reboot transitions remain untested.
 
 Do not press Power for the first hardware test until device grabbing is confirmed and
 open work is saved. Verify one F13 click per press, no default power action, rearming,
 long hold, reconnect, ordinary keys, and restoration of the original profile behavior.
+
+## Validation
+
+On macOS 27.2 with the official 16.3.0 installation and its existing virtual driver,
+the separate application was installed through the normal system installer. The
+universal application suite passed signature verification. Automated checks passed:
+16 parallel-install/switch tests, 8 namespace assertions, and 83 raw-record assertions.
+
+Physical Bluetooth M5 tests produced exactly nine F13 down/up pairs:
+
+- One initial short press.
+- Three short presses followed by a two-second hold: four clicks, without repetition.
+- Two short presses after Bluetooth disconnect/reconnect and renewed device grabbing.
+- One short press after actual Mac sleep/wake and renewed device grabbing.
+- One short press after loading a temporary isolated profile and restoring the initial
+  isolated profile byte-for-byte.
+
+The opt-in recorder observed only F13 output. For every phase, the user confirmed
+there was no additional sleep, shutdown, or power dialog. The user also confirmed
+input events for direction keys, Home, Back, List, and a rear-keyboard letter.
+
+Restoring the official application stopped the isolated core, cleared its activation,
+and restored the original loaded/disabled service states. Official backend communication
+and M5 grabbing were verified. All 28 saved application, driver-helper, service-plist,
+and configuration fingerprints matched; the shared driver was not restarted by the
+restore action. Private configuration and event logs are not included in the repository.
+
+This validates the tested Bluetooth device and local switch workflow. USB operation,
+x86_64 runtime, forced-crash recovery, login/reboot, and changing profiles while a key
+is held were not physically tested. The package remains a local-development artifact.
 
 ## Optional F13 hardware-test recorder
 

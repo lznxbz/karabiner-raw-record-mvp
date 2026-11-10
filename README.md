@@ -5,6 +5,8 @@ Experimental `from.raw_record` input matching for Karabiner-Elements, based on
 
 For a separate installation that preserves the official app, see
 [Parallel installation and switching](docs/raw-record-parallel.md).
+Bluetooth hardware validation passed nine Power operations, including hold, reconnect,
+sleep/wake, and profile switching; see the [validation scope](docs/raw-record-parallel.md#validation).
 
 See [Raw Record MVP: syntax, build, installation and recovery](docs/raw-record-mvp.md)
 and the [Bluetooth example](examples/raw-record/m5-bluetooth.json).
