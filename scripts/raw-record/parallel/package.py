@@ -138,7 +138,7 @@ def package(source, output, tools, signing_identity):
         'BundleIsRelocatable':False,'BundleIsVersionChecked':False,
         'BundleOverwriteAction':'upgrade',
     } for app in apps]))
-    archive = output/'RawRecordMVP-Parallel.pkg' 
+    archive = output/'RawRecordMVP-Parallel.pkg'
     subprocess.run(['pkgbuild','--root',str(root),'--identifier','org.pqrs.RawRecordMVP.Parallel',
                     '--version','16.3.0','--install-location','/','--ownership','recommended',
                     '--component-plist',str(components),str(archive)],check=True)
