@@ -1,166 +1,114 @@
 # Karabiner Raw Record MVP
 
-Experimental `from.raw_record` input matching for Karabiner-Elements, based on
-**v16.3.0**. The first target is an M5 remote's Power button → one F13 click.
+为 Karabiner-Elements 增加 `from.raw_record`，让原有规则引擎能够匹配指定设备的原始 HID 输入报告。首个已验收场景是 **蓝牙 M5 遥控器 Power → 一次 F13 点击**，并且没有附带系统电源动作。
 
-For a separate installation that preserves the official app, see
-[Parallel installation and switching](docs/raw-record-parallel.md).
-Bluetooth hardware validation passed nine Power operations, including hold, reconnect,
-sleep/wake, and profile switching; see the [validation scope](docs/raw-record-parallel.md#validation).
+这是基于 **Karabiner-Elements v16.3.0** 的实验性本机开发版本。提供独立的 `RawRecordMVP-Elements` 和 `RawRecordMVP-EventViewer`，与官方应用并排安装，通过工具切换运行，复用已安装的官方虚拟 HID 驱动。
 
-See [Raw Record MVP: syntax, build, installation and recovery](docs/raw-record-mvp.md)
-and the [Bluetooth example](examples/raw-record/m5-bluetooth.json).
-Software compilation and tests are separate from physical hardware validation.
-A complete, consistently signed package is required for installation.
+An experimental Karabiner-Elements fork adding input-only `from.raw_record` matching. The Bluetooth M5 Power-to-F13 mapping passed local hardware validation. The parallel build preserves the official installation and switches between the two input engines.
 
-以下保留上游项目说明。实验功能的语法、构建和回滚步骤见上面的文档；
-编译和自动测试通过不代表已验证遥控器按键或系统电源动作拦截。
+## 源码入口
 
----
+**请使用 [feat/parallel-install-mvp](https://github.com/lznxbz/karabiner-raw-record-mvp/tree/feat/parallel-install-mvp) 分支。** 本页同时用于仓库首页；`main` 保留上游代码，MVP 实现、独立安装工具和下列文档位于该功能分支。
 
-[![Build Status](https://github.com/pqrs-org/Karabiner-Elements/workflows/Karabiner-Elements%20CI/badge.svg)](https://github.com/pqrs-org/Karabiner-Elements/actions)
-[![License](https://img.shields.io/badge/license-Public%20Domain-blue.svg)](https://github.com/pqrs-org/Karabiner-Elements/blob/main/LICENSE.md)
+- [并排安装、切换与完整验收记录](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-parallel.md)
+- [raw_record 语法与实现说明](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-mvp.md)
+- [蓝牙 M5 完整规则示例](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/examples/raw-record/m5-bluetooth.json)
 
-# Karabiner-Elements
+## 已验证的结果
 
-Karabiner-Elements is a powerful key remapper for macOS.
+在 Apple Silicon Mac、macOS 27.2、Xcode 27.2、官方 Karabiner-Elements 16.3.0 和官方虚拟 HID 驱动 1.8.0 的环境中完成：
 
-## Download
+- **9 次实体 Power 操作，恰好产生 9 组 F13 按下/松开。** 覆盖短按、两秒长按、蓝牙断开重连、Mac 睡眠唤醒，以及独立 profile 切换后的输入。
+- 每个阶段均由用户确认没有附带休眠、关机或电源对话框；长按没有多次触发。
+- 方向键、Home、Back、List 和背面字母键均能显示输入事件。当前测试配置只新增 Power → F13 映射。
+- 测试后成功恢复原版通信、M5 接管及原服务状态。原版应用、驱动助手、服务声明和配置的 **28 项文件指纹一致**。
+- 8 项相关 C++ 测试套件通过，共 2,488 项断言，包含 83 项 raw_record 断言；另有 6 项 profile 工具测试、16 项并排安装与切换测试、8 项配置及通信路径断言通过。
+- 双架构应用完成构建与签名核验。实体测试仅覆盖上述蓝牙设备和本机环境。
 
-You can download Karabiner-Elements from the [official site](https://karabiner-elements.pqrs.org/).
+USB 模式、x86_64 实机运行、强制崩溃恢复、登录/重启，以及按住按键时切换 profile 尚未实测。USB 示例中的 VID/PID 来自已有协议观察，使用前仍需核对实际设备。
 
-Alternatively, if you use [Homebrew](https://brew.sh/), you can install Karabiner-Elements with `brew install --cask karabiner-elements`.
+## 构建与安装
 
-### Old releases
+需要已安装的官方 Karabiner-Elements **16.3.0** 及其正常运行的虚拟 HID 驱动，以及完整 Xcode、Command Line Tools、XcodeGen、CMake、xz、Python 3 和 Ruby。
 
-You can download previous versions of Karabiner-Elements from the [release notes](https://karabiner-elements.pqrs.org/docs/releasenotes/).
+在 Xcode 中准备有效的 **Apple Development 应用签名证书**，并确认所需的 Apple WWDR 中间证书可用。将下面的签名身份占位符替换为自己的有效应用签名身份。
 
-## Supported systems
-
-- macOS 27 Golden Gate
-    - Apple Silicon Macs
-- macOS 26 Tahoe
-    - Both Intel-based Macs and Apple Silicon Macs
-- macOS 15 Sequoia
-    - Both Intel-based Macs and Apple Silicon Macs
-- macOS 14 Sonoma
-    - Both Intel-based Macs and Apple Silicon Macs
-- macOS 13 Ventura
-    - Both Intel-based Macs and Apple Silicon Macs
-
-## Usage
-
-Documentation can be found here: <https://karabiner-elements.pqrs.org/docs/>
-
-## Donations
-
-If you would like to support Karabiner-Elements development financially, donations can be made at <https://karabiner-elements.pqrs.org/docs/pricing/>.
-
----
-
-## For developers
-
-### System requirements to build Karabiner-Elements
-
-- macOS 15+
-- Xcode 26+
-- Command Line Tools for Xcode (`xcode-select --install`)
-- xz (`brew install xz`)
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
-- CMake (`brew install cmake`)
-
-### How to build the package
-
-#### Step 1: Get the source code
-
-Get the source code by running the following commands in Terminal.app.
-
-```shell
-git clone --depth 1 https://github.com/pqrs-org/Karabiner-Elements.git
-cd Karabiner-Elements
-git submodule update --init --recursive --depth 1
+```sh
+git clone --branch feat/parallel-install-mvp https://github.com/lznxbz/karabiner-raw-record-mvp.git
+cd karabiner-raw-record-mvp
+git submodule update --init --recursive
+security find-identity -v -p codesigning
+export PQRS_ORG_CODE_SIGN_IDENTITY="YOUR_APPLICATION_SIGNING_IDENTITY_HASH"
+bash scripts/raw-record/parallel/build.sh
 ```
 
-#### Step 2: Prepare code signing identities
+脚本会构建、运行检查并生成 `RawRecordMVP-Parallel.pkg` 和 `parallel-package.json`，最后打印输出目录；**不会自动安装或切换服务**。
 
-Code signing is required for the Karabiner-Elements background services to run.
-Prepare the appropriate code signing identities for your Apple Developer Program status.
+应用及其助手使用同一开发证书签名，外层安装包未做分发签名；这是本机开发产物，不是已公证的分发安装包。Apple Development 应用证书不能作为安装包分发签名证书使用。
 
-- If you are not enrolled in the Apple Developer Program:
-    - Use a development code signing identity.
-    - In Xcode Settings, add your account under Apple Accounts, then create an Apple Development certificate from Manage Certificates.
-- If you are enrolled in the Apple Developer Program:
-    - Create Developer ID Application and Developer ID Installer certificates if you do not already have them.
+连接蓝牙 M5 后，将下面两个路径替换为实际构建产物的位置，运行独立安装工具：
 
-After preparing the code signing identities, run the following command in Terminal.app to get the identity hashes.
-
-```shell
-security find-identity -v
+```sh
+python3 scripts/raw-record/parallel/install.py \
+  /path/to/RawRecordMVP-Parallel.pkg \
+  /path/to/parallel-package.json
 ```
 
-The output will look like this.
-The strings such as `C3107C61DB3605DA2D4549054B225DAFB1D6FA2D` and `BD3B995B69EBA8FC153B167F063079D19CCC2834` are identity hashes.
+安装通过正常系统流程请求管理员确认，校验安装包及签名，并比较原版文件和配置指纹。首次安装会创建独立的 Power → F13 profile；已有独立配置会保留。完整步骤见[并排安装说明](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-parallel.md)。
 
-```text
-  1) C3107C61DB3605DA2D4549054B225DAFB1D6FA2D "Developer ID Installer: Fumihiko Takayama (G43BCU2T37)"
-  2) BD3B995B69EBA8FC153B167F063079D19CCC2834 "Developer ID Application: Fumihiko Takayama (G43BCU2T37)"
-  3) C0D6EBFEAD3C0EB6DB91C3514FF647917A0B5112 "Apple Development: Fumihiko Takayama (YVB3SM6ECS)"
+## 切换使用与恢复原版
+
+安装后，先打开独立应用并给名称含 **RawRecordMVP** 的后台服务、辅助功能和输入监控项目授予所需权限：
+
+```sh
+python3 "/Library/Application Support/org.pqrs.rawmvp/RawRecordMVP-Elements/tools/raw-record-switch.py" setup
 ```
 
-Set these values in environment variables as follows.
-To avoid forgetting these settings, you can add them to your shell configuration file, such as `.zshrc`.
+启用独立版。工具会临时暂停原版输入引擎，再启动独立版；共享虚拟 HID 驱动继续运行：
 
-```shell
-# Specify the identity hash for Developer ID Application or Apple Development.
-export PQRS_ORG_CODE_SIGN_IDENTITY=BD3B995B69EBA8FC153B167F063079D19CCC2834
-# Specify the identity hash for Developer ID Installer or Apple Development.
-export PQRS_ORG_INSTALLER_CODE_SIGN_IDENTITY=C3107C61DB3605DA2D4549054B225DAFB1D6FA2D
+```sh
+python3 "/Library/Application Support/org.pqrs.rawmvp/RawRecordMVP-Elements/tools/raw-record-switch.py" developer
 ```
 
-#### Step 3: Build a package
+结束后恢复原版：
 
-Build a package by running the following command in Terminal.app.
-
-```shell
-make package
+```sh
+python3 "/Library/Application Support/org.pqrs.rawmvp/RawRecordMVP-Elements/tools/raw-record-switch.py" original
 ```
 
-The `make` script will create a **Karabiner-Elements-VERSION.dmg** in the current directory.
-The package is included in the dmg file.
+命令以当前登录用户运行，管理员确认由系统请求。**仅打开独立应用不会启用映射**，必须通过切换工具激活。若上次切换中断，先运行 `original` 完成恢复，再开始新的测试。
 
-#### Step 4: Install the package you built
+独立配置位于 `~/.config/karabiner-raw-record-mvp/karabiner.json`；设置了 `XDG_CONFIG_HOME` 时使用对应目录。独立版不会复制或改写原版 profile。首次在其他设备测试 Power 前，应保存工作并确认目标设备已被独立版接管。
 
-Open the dmg file and install Karabiner-Elements from the pkg file inside it.
+## 规则示例
 
-The permissions you grant to Karabiner-Elements, such as background service startup and Accessibility access, are based on the code signing identity.
-Therefore, if you switch from the officially distributed package to your own build, these permissions become invalid and must be granted again.
+下面是一个 basic manipulator 片段。`key_down` 和 `key_up` 只包含报告正文，**不包含 Report ID**；设备、集合、报告编号和长度均需精确匹配。
 
-macOS System Settings may not update its UI when permissions are invalidated by a signer change.
-In that case, reset the permissions by following these steps.
+```json
+{
+  "type": "basic",
+  "from": {
+    "raw_record": {
+      "vendor_id": 25098,
+      "product_id": 1031,
+      "collection_usage_page": 1,
+      "collection_usage": 128,
+      "report_id": 3,
+      "payload_length": 1,
+      "key_down": [1],
+      "key_up": [0]
+    }
+  },
+  "to": [{ "key_code": "f13", "repeat": false }]
+}
+```
 
-1.  Install your package.
-2.  In System Settings, disable or remove the following permissions.
-    - Disable both of the following background services:
-        - Karabiner-Elements Non-Privileged Agents v2
-        - Karabiner-Elements Privileged Daemons v2
-    - Remove the Accessibility permission.
-3.  Restart macOS.
-4.  Open Karabiner-Elements and grant the permissions again.
+蓝牙 M5 使用 VID **25098**、PID **1031**、System Control 集合 **0x01/0x80**。`repeat:false` 在按下时输出一次完整 F13 点击，原始释放报告使下一次按下能够再次触发。
 
-After these steps, the Karabiner-Elements package you built should work.
+`raw_record` 是输入专用定义，输出继续使用普通 `to` 动作。不支持通配符、掩码或任意原始 HID 输出；应只用于普通输入管线尚未转换的输入。完整字段约束见[语法说明](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-mvp.md#json)。
 
-### Note about pre-built binaries and Swift packages
+## 验收记录与上游归属
 
-Karabiner-Elements uses some pre-built binaries and Swift packages during the build.
+独立 EventViewer 提供默认关闭的 F13 验收记录模式，仅记录 F13 按下、松开及时间。启用方式和验证边界见[验收指南](https://github.com/lznxbz/karabiner-raw-record-mvp/blob/feat/parallel-install-mvp/docs/raw-record-parallel.md#optional-f13-hardware-test-recorder)。证书、安装包、本机配置和按键日志不随源码公开。
 
-- Pre-built binaries in the source tree:
-    - `vendor/Karabiner-DriverKit-VirtualHIDDevice/dist/Karabiner-DriverKit-VirtualHIDDevice-*.pkg` (the latest one)
-- Swift packages resolved by Xcode/SwiftPM during the build include:
-    - `Sparkle` for `Karabiner-Updater`
-    - `AsyncAlgorithms`, `CodeEditor`, and other packages used by individual apps
-
-The `make package` command does not rebuild the pre-built binaries listed above.<br/>
-These binaries are copied into the distributed package.
-
-Swift packages are resolved by Xcode/SwiftPM from their package repositories during the build.
-If you want to rebuild or modify them, please follow the instructions for each upstream project.
+本项目基于 [pqrs-org/Karabiner-Elements](https://github.com/pqrs-org/Karabiner-Elements)，保留上游历史和 [LICENSE.md](LICENSE.md)。官方应用下载与常规使用说明请参阅 [Karabiner-Elements 官方网站](https://karabiner-elements.pqrs.org/)。
