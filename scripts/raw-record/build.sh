@@ -20,6 +20,22 @@ if [[ $mode == package ]]; then
     security find-identity -v -p basic | grep -F "$PQRS_ORG_INSTALLER_CODE_SIGN_IDENTITY" >/dev/null || {
         echo "The installer signing identity is not available." >&2; exit 1;
     }
+    # The basic keychain policy also lists application-only certificates. Test
+    # installer signing before spending time compiling the complete application.
+    python3 - "$PQRS_ORG_INSTALLER_CODE_SIGN_IDENTITY" <<'PYINSTALLERSIGN'
+from pathlib import Path
+import subprocess, sys, tempfile
+with tempfile.TemporaryDirectory(prefix='raw-record-package-sign-') as directory:
+    original = Path(directory) / 'Probe.pkg'
+    signed = Path(directory) / 'Probe-signed.pkg'
+    subprocess.run(['pkgbuild', '--nopayload', '--identifier',
+                    'org.pqrs.raw-record.signing-probe', '--version', '0.0.0', str(original)],
+                   check=True, stdout=subprocess.DEVNULL)
+    result = subprocess.run(['productsign', '--sign', sys.argv[1], str(original), str(signed)])
+    if result.returncode:
+        raise SystemExit('A usable installer signing certificate is required. Apple Development can sign apps, but cannot sign this package.')
+    subprocess.run(['pkgutil', '--check-signature', str(signed)], check=True)
+PYINSTALLERSIGN
 fi
 git submodule update --init --recursive
 cmake -S vendor -B vendor/build
@@ -37,6 +53,18 @@ else
     bash scripts/raw-record/test.sh --prepared
     make package
     package_file="$repo_dir/Karabiner-Elements-$(cat version).dmg"
+    # Upstream packaging can continue after productsign fails. Never write an
+    # install manifest until the actual resulting package signature is checked.
+    python3 - "$package_file" <<'PYVERIFYIMAGE'
+from pathlib import Path
+import subprocess, sys, tempfile
+with tempfile.TemporaryDirectory(prefix='raw-record-verify-image-') as directory:
+    subprocess.run(['hdiutil', 'attach', '-readonly', '-nobrowse', '-mountpoint', directory, sys.argv[1]], check=True)
+    try:
+        subprocess.run(['pkgutil', '--check-signature', str(Path(directory) / 'Karabiner-Elements.pkg')], check=True)
+    finally:
+        subprocess.run(['hdiutil', 'detach', directory], check=True)
+PYVERIFYIMAGE
     python3 - "$package_file" "$repo_dir" <<'PYMANIFEST'
 import hashlib, json, pathlib, subprocess, sys
 image, repo = map(pathlib.Path, sys.argv[1:])

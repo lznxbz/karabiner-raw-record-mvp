@@ -19,6 +19,12 @@ prove that the hardware's default action has been suppressed.
   hardware verification remains required, especially for Bluetooth release behavior.
 - Eight relevant C++ suites passed (2,488 assertions in total), including 83
   raw-record assertions. Six Python profile-helper tests also passed.
+- The complete application suite also compiled after backporting the two upstream
+  Xcode 27 fixes listed below. Eleven application bundles (including embedded helpers)
+  and the CLI passed signature verification with the same Apple Development certificate.
+  The resulting local-development image contains an **unsigned installer package**;
+  it is not a Developer ID-signed distribution package and does not satisfy the
+  standard `install.sh` signature guard. It has not been installed or hardware-tested.
 - Core Service has been compiled for arm64 and x86_64. A compiled unsigned app is
   **not an installable replacement** for the official signed app.
 - Signed full-package installation, macOS permission migration, physical F13 events,
@@ -141,6 +147,20 @@ This tests first and builds/signs the **complete** upstream application package,
 using one consistent application signer. It writes a local DMG manifest with image
 and installed Core Service hashes. Do not replace only Core Service inside an
 official installation, and do not install the unsigned `core` build.
+
+Apple Development was verified for application signing on the target Mac after
+installing Apple's missing WWDR G3 intermediate certificate. It was rejected by
+`productsign` for installer signing. An app-signing certificate alone therefore does
+not satisfy this script's signed-package installation route. A usable installer
+signing identity is required as well; package mode now tests that capability before
+compiling and checks the actual generated package before creating an install manifest.
+The upstream packaging script can continue after an installer-signing failure, so
+an emitted DMG alone is not evidence of an installable signed package.
+
+Xcode 27 full-suite compilation also requires upstream compatibility fixes
+`932f051a2b8f5b45f3259066c88a966c2eb6d443` and `2d49576b0`, backported here.
+They fix two Swift state initializers and explicitly handle cancellation of an
+updater task. No GUI controls are added.
 
 The package/install scripts have preflight guards and syntax checks, but cannot be
 validated end to end without valid signing identities and an approved installation.
