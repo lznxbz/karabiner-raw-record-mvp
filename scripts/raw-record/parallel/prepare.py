@@ -29,6 +29,7 @@ def transform(text):
     text = text.replace('"karabiner"', f'"{CONFIG}"')
     text = text.replace('<string>karabiner</string>', f'<string>{CONFIG}</string>')
     text = text.replace('karabiner://', f'{CONFIG}://')
+    text = text.replace('/var/log/karabiner/core_service.log', '/var/log/raw-record-mvp/core_service.log')
     for i, item in reversed(list(enumerate(protected))):
         text = text.replace(f'__RAW_MVP_SHARED_{i}__', item)
     return text
@@ -121,13 +122,19 @@ def prepare(repo, destination):
     # Remove the archive's empty submodule directories and point at already
     # initialized dependencies only after transformations have finished.
     import shutil
+    shutil.copyfile(Path(__file__).with_name('F13TestRecorder.swift'),
+                    destination/'src/apps/EventViewer/src/F13TestRecorder.swift')
+    path=destination/'src/apps/EventViewer/src/EventHistory.swift'
+    replace_once(path, '  Task { @MainActor in\n    let entry = EventHistoryEntry(timestamp: timestamp)',
+                 '  if usagePage == 0x7 && usage == 0x68 {\n    Task { @MainActor in\n      F13TestRecorder.shared.record(down: integerValue != 0)\n    }\n  }\n\n  Task { @MainActor in\n    let entry = EventHistoryEntry(timestamp: timestamp)')
     vendor = destination / 'vendor'
     shutil.rmtree(vendor)
     vendor.symlink_to((repo / 'vendor').resolve(), target_is_directory=True)
     info = {'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip(),
             'support_root': SUPPORT, 'product': PRODUCT, 'configuration_directory': CONFIG,
             'shared_driver_unchanged': True,
-            'transformer_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+            'transformer_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            'f13_recorder_sha256':hashlib.sha256(Path(__file__).with_name('F13TestRecorder.swift').read_bytes()).hexdigest()}
     (destination / 'parallel-build.json').write_text(json.dumps(info, indent=2) + '\n')
     return info
 

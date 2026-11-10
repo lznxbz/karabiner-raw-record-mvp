@@ -7,6 +7,7 @@ import json
 import os
 import plistlib
 import shlex
+import shutil
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -78,7 +79,12 @@ def reject_aliases():
 
 def device_identifiers():
     cli='/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_cli'
-    devices=json.loads(subprocess.check_output([cli,'--list-connected-devices'],text=True))
+    response=subprocess.run([cli,'--list-connected-devices'],capture_output=True,text=True,timeout=20)
+    try:
+        devices=json.loads(response.stdout)
+        if response.returncode or not isinstance(devices,list):raise ValueError('Invalid device response')
+    except ValueError as error:
+        raise RuntimeError('The official backend is not communicating. Wake and unlock the Mac, then retry after Karabiner resumes.') from error
     result=[]
     for device in devices:
         ids=device.get('identifiers',device.get('device_identifiers',{}))
@@ -133,9 +139,17 @@ def install(package,manifest_file):
     config_root.mkdir(parents=True,exist_ok=True,mode=0o700)
     descriptor,name=tempfile.mkstemp(prefix='installation-original-',suffix='.json',dir=str(config_root))
     with os.fdopen(descriptor,'w') as stream:json.dump(before,stream,indent=2);stream.write('\n')
-    command=shlex.join(['/usr/sbin/installer','-pkg',str(package),'-target','/'])
-    apple_script='on run arguments\n do shell script (item 1 of arguments) with administrator privileges\nend run'
-    subprocess.run(['osascript','-e',apple_script,command],check=True)
+    # The authenticated installer may not inherit access to a user's Documents
+    # directory. Stage the same reviewed bytes in a private temporary directory;
+    # do not remove quarantine attributes or change any system security policy.
+    with tempfile.TemporaryDirectory(prefix='raw-record-parallel-install-',dir='/private/tmp') as directory:
+        staged=Path(directory)/'RawRecordMVP-Parallel.pkg'
+        shutil.copy2(package,staged)
+        if hashlib.sha256(staged.read_bytes()).hexdigest()!=state['package_sha256']:
+            raise RuntimeError('Temporary installer copy does not match the reviewed package.')
+        command=shlex.join(['/usr/sbin/installer','-pkg',str(staged),'-target','/'])
+        apple_script='on run arguments\n do shell script (item 1 of arguments) with administrator privileges\nend run'
+        subprocess.run(['osascript','-e',apple_script,command],check=True)
     if original_fingerprints()!=before:
         raise RuntimeError('The official installation changed during installation; inspect the saved fingerprints before continuing.')
     for app in state['applications']:

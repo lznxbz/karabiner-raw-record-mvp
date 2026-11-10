@@ -84,11 +84,24 @@ class SwitchRecoveryTests(unittest.TestCase):
                'agents':{label:{'pid':234,'loaded':True,'disabled':False} for label in switch.agent_labels('original')}}
         def status(domain,label):return {'pid':123 if label==switch.CORE['original'] else None,'loaded':True,'disabled':False}
         with patch.object(switch,'service_state',side_effect=status),patch.object(switch,'close_windows'),\
-             patch.object(switch,'pause'),patch.object(switch,'resume') as resume,patch.object(switch,'authenticated') as admin:
+             patch.object(switch,'pause'),patch.object(switch,'resume') as resume,patch.object(switch,'authenticated') as admin,\
+             patch.object(switch,'backend_ready',return_value=True):
             switch.restore_original(state)
         admin.assert_not_called()
         self.assertEqual(resume.call_count,3)
         self.assertEqual(json.loads((self.config/'switch-state.json').read_text())['mode'],'original')
+
+    def test_launchctl_disabled_state_supports_boolean_and_word_output(self):
+        label=switch.CORE['developer']
+        for value,expected in [('true',True),('false',False),('disabled',True),('enabled',False)]:
+            responses=[Mock(returncode=0,stdout='pid = 123\n'),Mock(returncode=0,stdout='"'+label+'" => '+value)]
+            with patch.object(switch,'run',side_effect=responses):
+                self.assertEqual(switch.service_state('system',label)['disabled'],expected)
+
+    def test_backend_readiness_requires_valid_daemon_response(self):
+        for code,output,expected in [(0,'[]',True),(0,'',False),(0,'{}',False),(1,'[]',False)]:
+            with patch.object(switch,'run',return_value=Mock(returncode=code,stdout=output)):
+                self.assertEqual(switch.backend_ready('/fixture/cli'),expected)
 
     def test_pause_only_controls_the_requested_core(self):
         calls=[]

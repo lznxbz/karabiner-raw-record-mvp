@@ -36,13 +36,21 @@ def run(command, required=True, timeout=20):
     return result
 
 
+def backend_ready(cli):
+    # The upstream CLI can exit successfully after an IPC failure. Require a
+    # valid device-list response from the daemon rather than only a process PID.
+    result=run([cli,'--list-connected-devices'],required=False,timeout=3)
+    try:return result.returncode==0 and isinstance(json.loads(result.stdout),list)
+    except ValueError:return False
+
+
 def service_state(domain, label):
     result = run(['/bin/launchctl','print',domain+'/'+label],required=False)
     pid = re.search(r'^\s*pid = (\d+)\s*$',result.stdout,re.M)
     disabled = run(['/bin/launchctl','print-disabled',domain],required=False).stdout
-    flag = re.search(r'"'+re.escape(label)+r'"\s*=>\s*(true|false)',disabled)
+    flag = re.search(r'"'+re.escape(label)+r'"\s*=>\s*(true|false|enabled|disabled)',disabled)
     return {'loaded':result.returncode==0,'pid':int(pid.group(1)) if pid else None,
-            'disabled':bool(flag and flag.group(1)=='true')}
+            'disabled':bool(flag and flag.group(1) in ['true','disabled'])}
 
 
 def service_plist(mode, daemon, label):
@@ -201,6 +209,7 @@ def restore_original(state):
     for label,previous in state['agents'].items():resume('original',domain,label,previous)
     if state['core'].get('pid'):
         wait_for(lambda:bool(service_state('system',CORE['original'])['pid']))
+        wait_for(lambda:backend_ready(OFFICIAL/'bin/karabiner_cli'))
     state['mode']='original'
     save(state)
     print('Official Karabiner restored. Original application files and configuration were not overwritten.')
@@ -222,6 +231,9 @@ def enter_developer():
     if not service_state('system',DRIVER)['pid']:
         raise RuntimeError('The installed official virtual HID daemon must already be running.')
     manager=SUPPORT/'RawRecordMVP-Elements Privileged Daemons v2.app/Contents/MacOS/RawRecordMVP-Elements Privileged Daemons v2'
+    # Re-registering an already approved owned service reloads the job after
+    # the previous switch booted it out. It does not grant missing OS approval.
+    run([manager,'register-core-daemons'])
     if run([manager,'core-daemons-enabled'],required=False).returncode:
         raise RuntimeError('Run setup and approve the isolated background service in System Settings first.')
     if not service_state('system',CORE['developer'])['loaded']:
@@ -240,7 +252,7 @@ def enter_developer():
         for label in agent_labels('developer'):
             resume('developer',domain,label,{'loaded':label!=agent_labels('developer')[2], 'disabled':False,'pid':1})
         cli=SUPPORT/'bin/karabiner_cli'
-        wait_for(lambda:run([cli,'--show-current-profile-name'],required=False,timeout=3).returncode==0)
+        wait_for(lambda:backend_ready(cli))
         if service_state('system',CORE['original'])['pid']:
             raise RuntimeError('Both cores are running; returning to the original application.')
         state['mode']='developer';save(state)
